@@ -43,12 +43,13 @@ class My_App(QtWidgets.QMainWindow):
         pixmap = pixmap.scaled(320, 240, QtCore.Qt.KeepAspectRatio)
 
         self.template_label.setPixmap(pixmap)
-        grayframe =cv2.cvtColor(cv2.imread(self.template_path), cv2.COLOR_BGR2GRAY)
+        self.grayframe =cv2.cvtColor(cv2.imread(self.template_path), cv2.COLOR_BGR2GRAY)
+        self.template_h, self.template_w = self.grayframe.shape
         self.index_params=dict(algorithm=0, trees=5)
         self.search_params=dict()
         self.flann=cv2.FlannBasedMatcher(self.index_params, self.search_params)
 
-        self.kp_image, self.desc_image = self.sift.detectAndCompute(grayframe, None)
+        self.kp_image, self.desc_image = self.sift.detectAndCompute(self.grayframe, None)
         print("Loaded template image file: " + self.template_path)
 
     # Source: stackoverflow.com/questions/34232632/
@@ -66,8 +67,8 @@ class My_App(QtWidgets.QMainWindow):
         if not ret:
             print("Error: cannot read frame from camera")
             return
-        grayframe = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        kp_grayframe, desc_grayframe = self.sift.detectAndCompute(grayframe, None)
+        grayframe_v = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        kp_grayframe, desc_grayframe = self.sift.detectAndCompute(grayframe_v, None)
         
 
         self.sift.detectAndCompute(frame, None)
@@ -80,17 +81,19 @@ class My_App(QtWidgets.QMainWindow):
         query_pts = np.float32([self.kp_image[m.queryIdx].pt for m in good_points]).reshape(-1, 1, 2)
         train_pts = np.float32([kp_grayframe[m.trainIdx].pt for m in good_points]).reshape(-1, 1, 2)
         
-        if len(good_points) > 10:
+        if len(good_points) > 35:
             matrix, mask = cv2.findHomography(query_pts, train_pts, cv2.RANSAC, 5.0)
             matches_mask = mask.ravel().tolist()
-            h, w = grayframe.shape
-            pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+            h, w = grayframe_v.shape
+            pts = np.float32([[0, 0], [0, self.template_h - 1], [self.template_w - 1, self.template_h - 1], [self.template_w - 1, 0]]).reshape(-1, 1, 2)
             dst = cv2.perspectiveTransform(pts, matrix)
             frame = cv2.polylines(frame, [np.int32(dst)], True, (255, 0, 0), 3)
-            homography = cv2.polylines(frame, [np.int32(dst)], True, (255, 0, 0), 3)
         else:
             print("Not enough matches are found - {}/10".format(len(good_points)))
             matches_mask = None
+
+            match_vis = cv2.drawMatches(self.grayframe, self.kp_image, grayframe_v, kp_grayframe, good_points, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+            frame = match_vis
 
         
 
